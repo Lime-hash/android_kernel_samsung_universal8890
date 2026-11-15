@@ -120,19 +120,6 @@ jobs:
           cp "$IMAGE" "$KERNEL_DIR/Image"
           ls -lh "$KERNEL_DIR/Image"
 
-      # ================= 新增代码开始 =================
-      - name: Strip Kernel Debug Symbols
-        if: steps.build.outcome == 'success'
-        run: |
-          export PATH="$HOME/gcc-64/bin:$PATH"
-          echo "Before strip:"
-          ls -lh "$KERNEL_DIR/Image"
-          # 使用交叉编译工具链剥离调试符号
-          aarch64-linux-android-strip --strip-debug "$KERNEL_DIR/Image"
-          echo "After strip:"
-          ls -lh "$KERNEL_DIR/Image"
-      # ================= 新增代码结束 =================
-
       - name: Package DTB (Exynos DTBH format)
         if: steps.build.outcome == 'success'
         run: |
@@ -184,6 +171,69 @@ jobs:
             ${{ env.KERNEL_DIR }}/dtb.img
             ${{ env.KERNEL_DIR }}/dtb-raw/
           if-no-files-found: warn
+
+      # ==========================================
+      # 以下是新增的 AnyKernel3 自动打包流程
+      # ==========================================
+
+      - name: Strip Image (Remove Debug Symbols)
+        if: steps.build.outcome == 'success'
+        run: |
+          export PATH="$HOME/gcc-64/bin:$PATH"
+          echo "Before strip:"
+          ls -lh "$KERNEL_DIR/Image"
+          # 使用交叉编译工具链中的 strip 剥离调试信息，解决 35MB 过大的问题
+          aarch64-linux-android-strip --strip-debug "$KERNEL_DIR/Image"
+          echo "After strip:"
+          ls -lh "$KERNEL_DIR/Image"
+
+      - name: Package AnyKernel3 ZIP
+        if: steps.build.outcome == 'success'
+        run: |
+          # 1. 克隆干净的 AnyKernel3 模板
+          git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git anykernel3
+          
+          # 2. 清理模板中不需要的文件和目录
+          cd anykernel3
+          rm -rf .git patch ramdisk
+          
+          # 3. 拷贝编译产物
+          cp "$KERNEL_DIR/Image" .
+          if [ -f "$KERNEL_DIR/dtb.img" ]; then
+            cp "$KERNEL_DIR/dtb.img" .
+          fi
+          
+          # 4. 自动修改 anykernel.sh 配置
+          # 强制开启设备校验并设置 hero2lte
+          sed -i 's/^do.devicecheck=.*/do.devicecheck=1/' anykernel.sh
+          sed -i 's/^device.name1=.*/device.name1=hero2lte/' anykernel.sh
+          sed -i 's/^device.name2=.*/device.name2=herolte/' anykernel.sh
+          sed -i 's/^device.name3=.*/device.name3=grace/' anykernel.sh
+          sed -i 's/^device.name4=.*/device.name4=gracelte/' anykernel.sh
+          # 修改三星 UFS 分区路径
+          sed -i 's|^BLOCK=.*|BLOCK=/dev/block/platform/15570000.ufs/by-name/BOOT;|' anykernel.sh
+          # 关闭外部模块加载（因为我们没有额外的 .ko）
+          sed -i 's/^do.modules=.*/do.modules=0/' anykernel.sh
+          
+          # 5. 打包为 ZIP (注意这里去掉了根目录嵌套，并且去除了隐藏文件)
+          cd ..
+          cd anykernel3
+          zip -r9 "../AnyKernel3-hero2lte-${GITHUB_RUN_ID}.zip" * -x "*.git*"
+          cd ..
+          echo "AnyKernel3 ZIP created successfully:"
+          ls -lh "AnyKernel3-hero2lte-${GITHUB_RUN_ID}.zip"
+
+      - name: Upload AnyKernel3 ZIP
+        if: steps.build.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: AnyKernel3-ZIP-${{ github.run_id }}
+          path: ${{ env.KERNEL_DIR }}/AnyKernel3-hero2lte-${{ github.run_id }}.zip
+          if-no-files-found: error
+
+      # ==========================================
+      # 原有日志上传部分
+      # ==========================================
 
       - name: Upload full build log
         if: always()
