@@ -86,20 +86,26 @@ jobs:
 
       - name: Configure kernel
         run: |
-          export PATH="$HOME/clang/bin:$HOME/gcc-64/bin:$HOME/gcc-32/bin:$PATH"
-          export CROSS_COMPILE=$HOME/gcc-64/bin/aarch64-linux-android-
-          export CROSS_COMPILE_ARM32=$HOME/gcc-32/bin/arm-linux-androideabi-
-          make O=out ${{ env.DEFCONFIG }}
+          export PATH="$HOME/gcc-64/bin:$HOME/gcc-32/bin:$PATH"
+          make O=out ARCH=arm64 \
+            CROSS_COMPILE=$HOME/gcc-64/bin/aarch64-linux-android- \
+            CROSS_COMPILE_ARM32=$HOME/gcc-32/bin/arm-linux-androideabi- \
+            CLANG_TRIPLE= \
+            GCC_TOOLCHAIN= \
+            ${{ env.DEFCONFIG }}
 
       - name: Build kernel with verbose logging
         id: build
         continue-on-error: true
         run: |
           exec > >(tee -a build.log) 2>&1
-          export PATH="$HOME/clang/bin:$HOME/gcc-64/bin:$HOME/gcc-32/bin:$PATH"
-          export CROSS_COMPILE=$HOME/gcc-64/bin/aarch64-linux-android-
-          export CROSS_COMPILE_ARM32=$HOME/gcc-32/bin/arm-linux-androideabi-
-          make O=out -j$(nproc --all) V=1
+          export PATH="$HOME/gcc-64/bin:$HOME/gcc-32/bin:$PATH"
+          make O=out ARCH=arm64 \
+            CROSS_COMPILE=$HOME/gcc-64/bin/aarch64-linux-android- \
+            CROSS_COMPILE_ARM32=$HOME/gcc-32/bin/arm-linux-androideabi- \
+            CLANG_TRIPLE= \
+            GCC_TOOLCHAIN= \
+            -j$(nproc --all) V=1
 
       - name: Check build result
         if: steps.build.outcome == 'failure'
