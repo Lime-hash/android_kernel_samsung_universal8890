@@ -120,6 +120,19 @@ jobs:
           cp "$IMAGE" "$KERNEL_DIR/Image"
           ls -lh "$KERNEL_DIR/Image"
 
+      # ================= 新增代码开始 =================
+      - name: Strip Kernel Debug Symbols
+        if: steps.build.outcome == 'success'
+        run: |
+          export PATH="$HOME/gcc-64/bin:$PATH"
+          echo "Before strip:"
+          ls -lh "$KERNEL_DIR/Image"
+          # 使用交叉编译工具链剥离调试符号
+          aarch64-linux-android-strip --strip-debug "$KERNEL_DIR/Image"
+          echo "After strip:"
+          ls -lh "$KERNEL_DIR/Image"
+      # ================= 新增代码结束 =================
+
       - name: Package DTB (Exynos DTBH format)
         if: steps.build.outcome == 'success'
         run: |
